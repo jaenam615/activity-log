@@ -1,4 +1,4 @@
-/logs/
+/logs/*.csv
 
 ### IntelliJ IDEA ###
 workspace.xml
@@ -48,3 +48,10 @@ build/
 .gradle/
 **/gradle/wrapper/gradle-wrapper.jar.lck
 .idea/
+
+### Local run artifacts ###
+/data/
+/warehouse/
+/metastore_db/
+/derby.log
+/spark-warehouse/

@@ -34,14 +34,6 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// IntelliJ 가 compileOnly 의존성을 PROVIDED 스코프로 인식하게 강제.
-// 안 그러면 Scala trait 등 transitive 클래스를 못 찾아 "Cannot access ..." 에러가 뜸.
-idea {
-    module {
-        scopes["PROVIDED"]?.get("plus")?.add(configurations.compileOnly.get())
-    }
-}
-
 tasks.test {
     useJUnitPlatform()
     maxHeapSize = "2g"
@@ -61,4 +53,64 @@ tasks.shadowJar {
 
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+}
+
+val sampleInputs = "data/raw-sample/2019-Oct-sample.csv,data/raw-sample/2019-Nov-sample.csv"
+val sampleWarehouse = "file://${projectDir}/warehouse"
+
+tasks.register<JavaExec>("runIngest") {
+    group = "application"
+    description = "Run ActivityLogJob locally on sample CSVs (uses test classpath for Spark)"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.example.activitylog.jobs.ActivityLogJob"
+    maxHeapSize = "4g"
+    systemProperty("spark.master", "local[*]")
+    systemProperty("spark.ui.enabled", "false")
+    systemProperty("spark.sql.shuffle.partitions", "8")
+    jvmArgs(
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+        "--add-opens=java.base/java.nio=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/sun.security.action=ALL-UNNAMED",
+    )
+    args = listOf(
+        "--input", sampleInputs,
+        "--warehouse-path", sampleWarehouse,
+        "--checkpoint-path", sampleWarehouse,
+        "--database", "analytics",
+        "--table", "activity_log",
+        "--start-date", "2019-10-01",
+        "--end-date", "2019-11-30",
+    )
+}
+
+tasks.register<JavaExec>("runWau") {
+    group = "application"
+    description = "Run WauReport locally on the ingested warehouse"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.example.activitylog.jobs.WauReport"
+    maxHeapSize = "2g"
+    systemProperty("spark.master", "local[*]")
+    systemProperty("spark.ui.enabled", "false")
+    systemProperty("spark.sql.shuffle.partitions", "8")
+    jvmArgs(
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+        "--add-opens=java.base/java.nio=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/sun.security.action=ALL-UNNAMED",
+    )
+    args = listOf(
+        "--database", "analytics",
+        "--table", "activity_log",
+        "--from", "2019-10-01",
+        "--to", "2019-11-30",
+    )
 }
