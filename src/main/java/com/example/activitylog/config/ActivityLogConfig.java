@@ -4,14 +4,6 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * CLI 인자 + 검증을 한 곳에 모아 둔 설정 객체.
- *
- * record 는 Java 14+ 기능으로, Kotlin 의 data class 와 거의 동일합니다.
- * - 모든 필드가 자동으로 final.
- * - equals / hashCode / toString 자동 생성.
- * - 접근자는 메서드 호출 형식 (예: config.startDate()) — 필드 아닌 메서드.
- */
 public record ActivityLogConfig(
         List<String> inputPaths,
         String warehousePath,
@@ -24,17 +16,16 @@ public record ActivityLogConfig(
         boolean repairPartitions
 ) {
 
-    /** main(String[] args) 의 args 를 직접 파싱. 외부 라이브러리 없이 단순한 switch 로. */
     public static ActivityLogConfig parse(String[] argv) {
         List<String> inputPaths = List.of();
         String warehousePath = null;
-        String database = "default";
-        String tableName = "activity_log";
+        String database = Defaults.DEFAULT_DATABASE;
+        String tableName = Defaults.DEFAULT_TABLE;
         LocalDate startDate = null;
         LocalDate endDate = null;
         String checkpointPath = null;
-        int sessionGapMinutes = 5;
-        boolean repairPartitions = true;
+        int sessionGapMinutes = Defaults.DEFAULT_SESSION_GAP_MINUTES;
+        boolean repairPartitions = Defaults.DEFAULT_REPAIR_PARTITIONS;
 
         int i = 0;
         while (i < argv.length) {
@@ -44,29 +35,29 @@ public record ActivityLogConfig(
             }
             String value = argv[i++];
             switch (key) {
-                case "--input" ->
-                        inputPaths = Arrays.stream(value.split(",")).map(String::trim).toList();
-                case "--warehouse-path"      -> warehousePath = value;
-                case "--database"            -> database = value;
-                case "--table"               -> tableName = value;
-                case "--start-date"          -> startDate = LocalDate.parse(value);
-                case "--end-date"            -> endDate = LocalDate.parse(value);
-                case "--checkpoint-path"     -> checkpointPath = value;
-                case "--session-gap-minutes" -> sessionGapMinutes = Integer.parseInt(value);
-                case "--repair-partitions"   -> repairPartitions = Boolean.parseBoolean(value);
+                case CliFlags.INPUT ->
+                        inputPaths = Arrays.stream(value.split(CliFlags.INPUT_PATH_SEPARATOR)).map(String::trim).toList();
+                case CliFlags.WAREHOUSE_PATH      -> warehousePath = value;
+                case CliFlags.DATABASE            -> database = value;
+                case CliFlags.TABLE               -> tableName = value;
+                case CliFlags.START_DATE          -> startDate = LocalDate.parse(value);
+                case CliFlags.END_DATE            -> endDate = LocalDate.parse(value);
+                case CliFlags.CHECKPOINT_PATH     -> checkpointPath = value;
+                case CliFlags.SESSION_GAP_MINUTES -> sessionGapMinutes = Integer.parseInt(value);
+                case CliFlags.REPAIR_PARTITIONS   -> repairPartitions = Boolean.parseBoolean(value);
                 default -> throw new IllegalArgumentException("unknown arg: " + key);
             }
         }
 
-        if (inputPaths.isEmpty())   throw new IllegalArgumentException("--input is required");
-        if (warehousePath == null)  throw new IllegalArgumentException("--warehouse-path is required");
-        if (startDate == null)      throw new IllegalArgumentException("--start-date is required");
-        if (endDate == null)        throw new IllegalArgumentException("--end-date is required");
-        if (checkpointPath == null) throw new IllegalArgumentException("--checkpoint-path is required");
+        if (inputPaths.isEmpty())   throw new IllegalArgumentException(CliFlags.INPUT + " is required");
+        if (warehousePath == null)  throw new IllegalArgumentException(CliFlags.WAREHOUSE_PATH + " is required");
+        if (startDate == null)      throw new IllegalArgumentException(CliFlags.START_DATE + " is required");
+        if (endDate == null)        throw new IllegalArgumentException(CliFlags.END_DATE + " is required");
+        if (checkpointPath == null) throw new IllegalArgumentException(CliFlags.CHECKPOINT_PATH + " is required");
         if (endDate.isBefore(startDate))
-            throw new IllegalArgumentException("--end-date must be >= --start-date");
+            throw new IllegalArgumentException(CliFlags.END_DATE + " must be >= " + CliFlags.START_DATE);
         if (sessionGapMinutes <= 0)
-            throw new IllegalArgumentException("--session-gap-minutes must be > 0");
+            throw new IllegalArgumentException(CliFlags.SESSION_GAP_MINUTES + " must be > 0");
 
         return new ActivityLogConfig(
                 inputPaths, warehousePath, database, tableName,

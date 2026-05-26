@@ -1,6 +1,7 @@
 package com.example.activitylog.jobs;
 
 import com.example.activitylog.SparkTestBase;
+import com.example.activitylog.config.Defaults;
 import com.example.activitylog.io.ActivityLogReader;
 import com.example.activitylog.transform.SessionAssigner;
 import org.apache.spark.sql.Dataset;
@@ -25,27 +26,21 @@ class WauReportTest extends SparkTestBase {
         tmp.deleteOnExit();
         String warehouse = tmp.toURI().toString().replaceAll("/$", "");
 
-        // 2019-10-07(월) ~ 2019-10-13(일) KST 주차
         Dataset<Row> df = spark.createDataFrame(List.of(
-                // user 1: 1분 차이 → 한 세션, 2019-10-07 KST
                 rawRow("2019-10-07 00:00:00 UTC", 1L),
                 rawRow("2019-10-07 00:01:00 UTC", 1L),
-                // user 1: 15분 후 → 새 세션 (같은 KST 날짜)
                 rawRow("2019-10-07 00:15:00 UTC", 1L),
-                // user 2: 한 세션, 같은 주
                 rawRow("2019-10-08 02:00:00 UTC", 2L),
-                // user 1: 다음 주
                 rawRow("2019-10-14 02:00:00 UTC", 1L)
         ), ActivityLogReader.SOURCE_SCHEMA);
 
-        Dataset<Row> sessioned = SessionAssigner.assign(df, 5);
+        Dataset<Row> sessioned = SessionAssigner.assign(df, Defaults.DEFAULT_SESSION_GAP_MINUTES);
         sessioned.write()
-                .mode("overwrite")
+                .mode(Defaults.WRITE_MODE_OVERWRITE)
                 .partitionBy("event_date")
-                .option("compression", "snappy")
+                .option(Defaults.COMPRESSION_OPTION, Defaults.COMPRESSION_SNAPPY)
                 .parquet(warehouse);
 
-        // 외부 테이블 SELECT 처럼 다시 읽어와 임시 뷰로 등록.
         String table = "activity_log_test";
         spark.read().parquet(warehouse).createOrReplaceTempView(table);
 
@@ -67,11 +62,9 @@ class WauReportTest extends SparkTestBase {
                 ORDER BY week_start_kst
                 """.formatted(table)));
 
-        // date_trunc('WEEK', d) 는 월요일 시작.
         assertEquals(2L, byUser.get("2019-10-07"), "got " + byUser);
         assertEquals(1L, byUser.get("2019-10-14"), "got " + byUser);
 
-        // user1: 같은 KST 날짜에 세션 2개. user2: 세션 1개. → 3.
         assertEquals(3L, bySession.get("2019-10-07"), "got " + bySession);
         assertEquals(1L, bySession.get("2019-10-14"), "got " + bySession);
     }

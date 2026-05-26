@@ -1,0 +1,33 @@
+# 빌드 산출물 (컨테이너 안에서 다시 빌드)
+build/
+.gradle/
+out/
+bin/
+
+# IDE / 메타데이터
+.idea/
+.bsp/
+.vscode/
+*.iml
+
+# OS noise
+.DS_Store
+
+# 로그/체크포인트 — 호스트에서 생성된 것은 컨테이너에 가져갈 필요 없음
+logs/
+warehouse/
+checkpoint/
+metastore_db/
+derby.log
+
+# Git
+.git/
+.gitignore
+
+# Docker 자기 자신
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 입력 데이터 (수GB CSV) — 볼륨 마운트로 주입
+data/

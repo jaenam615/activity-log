@@ -1,6 +1,7 @@
 package com.example.activitylog.transform;
 
 import com.example.activitylog.SparkTestBase;
+import com.example.activitylog.config.Defaults;
 import com.example.activitylog.io.ActivityLogReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -23,18 +24,14 @@ class SessionAssignerTest extends SparkTestBase {
     @DisplayName("5분 이상 간격이면 새 세션을 생성한다")
     void gapOver5MinCreatesNewSession() {
         Dataset<Row> df = rawDF(List.of(
-                // user 1 — 세션 A: 00:00, 00:04 (4분 간격, 같은 세션)
                 rawRow("2019-10-01 00:00:00 UTC", 1L),
                 rawRow("2019-10-01 00:04:00 UTC", 1L),
-                // user 1 — 세션 B: 00:10 (6분 간격 → 새 세션)
                 rawRow("2019-10-01 00:10:00 UTC", 1L),
-                // user 1 — 세션 C: 00:30 (20분 간격 → 새 세션)
                 rawRow("2019-10-01 00:30:00 UTC", 1L),
-                // user 2 — 단일 세션
                 rawRow("2019-10-01 00:11:00 UTC", 2L)
         ));
 
-        Dataset<Row> out = SessionAssigner.assign(df, 5);
+        Dataset<Row> out = SessionAssigner.assign(df, Defaults.DEFAULT_SESSION_GAP_MINUTES);
 
         Map<Long, Integer> perUser = new HashMap<>();
         for (Row r : out.select("user_id", "session_id").distinct().collectAsList()) {
@@ -49,9 +46,9 @@ class SessionAssignerTest extends SparkTestBase {
     void exactly5MinIsAlsoNewSession() {
         Dataset<Row> df = rawDF(List.of(
                 rawRow("2019-10-01 00:00:00 UTC", 7L),
-                rawRow("2019-10-01 00:05:00 UTC", 7L)  // 정확히 5분
+                rawRow("2019-10-01 00:05:00 UTC", 7L)
         ));
-        long sessions = SessionAssigner.assign(df, 5)
+        long sessions = SessionAssigner.assign(df, Defaults.DEFAULT_SESSION_GAP_MINUTES)
                 .select("session_id").distinct().count();
         assertEquals(2, sessions);
     }
@@ -63,19 +60,17 @@ class SessionAssignerTest extends SparkTestBase {
                 rawRow("2019-10-01 00:00:00 UTC", 1L),
                 rawRow("2019-10-01 00:01:00 UTC", 1L)
         ));
-        List<Row> ids = SessionAssigner.assign(df, 5)
+        List<Row> ids = SessionAssigner.assign(df, Defaults.DEFAULT_SESSION_GAP_MINUTES)
                 .select("session_id").distinct().collectAsList();
         assertEquals(1, ids.size());
-        // 2019-10-01 00:00:00 UTC == epoch 초 1569888000
-        assertEquals("1_1569888000", ids.get(0).getString(0));
+        assertEquals("1_1569888000", ids.getFirst().getString(0));
     }
 
     @Test
     @DisplayName("event_date 는 KST 기준으로 산출된다")
     void eventDateIsInKst() {
-        // 2019-10-31 15:30 UTC == 2019-11-01 00:30 KST → 파티션은 2019-11-01.
         Dataset<Row> df = rawDF(List.of(rawRow("2019-10-31 15:30:00 UTC", 9L)));
-        String d = SessionAssigner.assign(df, 5)
+        String d = SessionAssigner.assign(df, Defaults.DEFAULT_SESSION_GAP_MINUTES)
                 .selectExpr("CAST(event_date AS STRING) AS d")
                 .head().getString(0);
         assertEquals("2019-11-01", d);
@@ -90,8 +85,8 @@ class SessionAssignerTest extends SparkTestBase {
                 rawRow("2019-10-01 00:04:00 UTC", 1L),
                 rawRow("2019-10-01 00:10:00 UTC", 1L)
         ));
-        long sessions = SessionAssigner.assign(df, 5)
+        long sessions = SessionAssigner.assign(df, Defaults.DEFAULT_SESSION_GAP_MINUTES)
                 .select("session_id").distinct().count();
-        assertEquals(3, sessions); // {00:00,00:04}, {00:10}, {00:30}
+        assertEquals(3, sessions);
     }
 }

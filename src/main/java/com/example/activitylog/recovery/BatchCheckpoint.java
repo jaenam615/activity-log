@@ -1,6 +1,7 @@
 package com.example.activitylog.recovery;
 
 import com.example.activitylog.config.ActivityLogConfig;
+import com.example.activitylog.config.Defaults;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -17,26 +18,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 파일 시스템 기반 배치 상태 마커 — 복구 장치 (recovery primitive) 의 핵심.
- *
- * 레이아웃:
- *   {basePath}/_jobs/state=started/{runId}/marker.json
- *   {basePath}/_jobs/state=success/{runId}/marker.json
- *   {basePath}/_jobs/state=failed/{runId}/marker.json
- *   {basePath}/_jobs/state=recovered/{runId}/marker.json
- *
- * 복구 흐름:
- *   1) 잡 시작 시 _jobs/state=started/ 를 스캔. 거기 남아 있는 디렉터리는
- *      직전 실행이 종료 마커를 남기지 못하고 죽었다는 뜻 → state=recovered/
- *      로 옮기고 로그에 안내.
- *   2) 출력 writer 가 dynamic partition overwrite 이므로, 동일 인자로 재실행
- *      하면 부분적으로 쓴 파티션도 그대로 덮어씌워진다 (멱등).
- *   3) 성공 시 started → success, 예외 시 started → failed 로 atomic rename.
- *
- * 체크포인트 보조 작업의 실패가 원본 잡 실패를 가리지 않도록 모든 secondary
- * 예외는 catch + log.
- */
+@SuppressWarnings("resource")
 public final class BatchCheckpoint {
 
     private static final Logger log = LoggerFactory.getLogger(BatchCheckpoint.class);
@@ -48,27 +30,27 @@ public final class BatchCheckpoint {
     public BatchCheckpoint(SparkSession spark, String basePath) {
         this.spark = spark;
         this.basePath = basePath;
-        this.jobsRoot = new Path(basePath + "/_jobs");
+        this.jobsRoot = new Path(basePath + "/" + Defaults.CHECKPOINT_JOBS_DIR);
     }
 
     private FileSystem fs() throws IOException {
         return FileSystem.get(URI.create(basePath), spark.sparkContext().hadoopConfiguration());
     }
 
-    private Path stateDir(String state) {
-        return new Path(jobsRoot, "state=" + state);
+    private Path stateDir(JobState state) {
+        return new Path(jobsRoot, Defaults.CHECKPOINT_STATE_PREFIX + state.dirName());
     }
 
-    private Path runDir(String runId, String state) {
+    private Path runDir(String runId, JobState state) {
         return new Path(stateDir(state), runId);
     }
 
-    /** 새 runId 발급. 부수 효과: 기존 started/ 항목은 recovered/ 로 이동. */
     public String start(ActivityLogConfig c) {
         try {
             recoverCrashedRuns();
-            String runId = LocalDate.now() + "_" + UUID.randomUUID().toString().substring(0, 8);
-            writeMarker(runDir(runId, "started"), startedBody(c));
+            String runId = LocalDate.now() + "_"
+                    + UUID.randomUUID().toString().substring(0, Defaults.CHECKPOINT_RUN_ID_SUFFIX_LENGTH);
+            writeMarker(runDir(runId, JobState.STARTED), startedBody(c));
             log.info("BatchCheckpoint START runId={}", runId);
             return runId;
         } catch (IOException e) {
@@ -78,7 +60,7 @@ public final class BatchCheckpoint {
 
     public void success(String runId) {
         try {
-            boolean moved = renameState(runId, "started", "success");
+            boolean moved = renameState(runId, JobState.SUCCESS);
             if (moved) log.info("BatchCheckpoint SUCCESS runId={}", runId);
         } catch (IOException e) {
             log.error("BatchCheckpoint success rename failed: {}", e.getMessage());
@@ -88,8 +70,8 @@ public final class BatchCheckpoint {
     public void fail(String runId, Throwable t) {
         try {
             FileSystem fs = fs();
-            Path src = runDir(runId, "started");
-            Path dst = runDir(runId, "failed");
+            Path src = runDir(runId, JobState.STARTED);
+            Path dst = runDir(runId, JobState.FAILED);
             fs.mkdirs(dst.getParent());
             if (fs.exists(src)) fs.rename(src, dst);
             writeMarker(dst, failedBody(t));
@@ -101,7 +83,7 @@ public final class BatchCheckpoint {
 
     private void recoverCrashedRuns() throws IOException {
         FileSystem fs = fs();
-        Path started = stateDir("started");
+        Path started = stateDir(JobState.STARTED);
         if (!fs.exists(started)) return;
         FileStatus[] entries = fs.listStatus(started);
         if (entries.length == 0) return;
@@ -115,16 +97,16 @@ public final class BatchCheckpoint {
             if (!st.isDirectory()) continue;
             String runId = st.getPath().getName();
             try {
-                renameState(runId, "started", "recovered");
+                renameState(runId, JobState.RECOVERED);
             } catch (IOException e) {
                 log.warn("failed to mark {} recovered: {}", runId, e.getMessage());
             }
         }
     }
 
-    private boolean renameState(String runId, String from, String to) throws IOException {
+    private boolean renameState(String runId, JobState to) throws IOException {
         FileSystem fs = fs();
-        Path src = runDir(runId, from);
+        Path src = runDir(runId, JobState.STARTED);
         Path dst = runDir(runId, to);
         if (!fs.exists(src)) return false;
         fs.mkdirs(dst.getParent());
@@ -134,13 +116,13 @@ public final class BatchCheckpoint {
     private void writeMarker(Path dir, String body) throws IOException {
         FileSystem fs = fs();
         fs.mkdirs(dir);
-        try (OutputStream out = fs.create(new Path(dir, "marker.json"), /* overwrite = */ true)) {
+        try (OutputStream out = fs.create(new Path(dir, Defaults.CHECKPOINT_MARKER_FILE), true)) {
             out.write(body.getBytes(StandardCharsets.UTF_8));
         }
     }
 
     private String startedBody(ActivityLogConfig c) {
-        return "{\"state\":\"started\""
+        return "{\"state\":\"" + JobState.STARTED.dirName() + "\""
                 + ",\"timestamp\":\"" + Instant.now() + "\""
                 + ",\"startDate\":\"" + c.startDate() + "\""
                 + ",\"endDate\":\"" + c.endDate() + "\""
@@ -151,7 +133,7 @@ public final class BatchCheckpoint {
 
     private String failedBody(Throwable t) {
         String msg = t.getMessage() != null ? t.getMessage() : t.getClass().getName();
-        return "{\"state\":\"failed\""
+        return "{\"state\":\"" + JobState.FAILED.dirName() + "\""
                 + ",\"timestamp\":\"" + Instant.now() + "\""
                 + ",\"error\":" + jsonStr(msg)
                 + "}";

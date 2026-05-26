@@ -1,0 +1,92 @@
+# =============================================================================
+# 두 잡을 한 번에 정의 — `ingest` (CSV→parquet 적재) 와 `report` (WAU 출력).
+#
+# 사용:
+#   1) Kaggle CSV 두 개를 ./data/ 아래에 둔다 (2019-Oct.csv, 2019-Nov.csv).
+#   2) docker compose run --rm ingest    # 적재
+#   3) docker compose run --rm report    # WAU 출력
+#
+# 또는 둘을 의존성으로 묶어서:
+#   docker compose up --build report     # ingest 가 success 로 끝난 뒤 report 실행
+#
+# 공유 자산은 named volume 으로 분리해 권한 이슈를 피한다:
+#   - warehouse_data   : parquet 출력 + BatchCheckpoint 의 _jobs/ 마커
+#   - metastore_data   : 임베디드 Hive Derby metastore (잡 두 개가 공유)
+# 입력 CSV 는 호스트 디렉터리 바인드 마운트 (./data → /data, read-only).
+# =============================================================================
+services:
+
+  # ------- 공통 빌드 (한 번만 빌드해서 두 서비스가 같은 이미지 사용) -------
+  activity-log:
+    image: activity-log:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # 추상 서비스 — 직접 실행 안 함
+    profiles: ["_build_only"]
+
+  # ------- 적재 잡 -------
+  ingest:
+    image: activity-log:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "0:0"                       # 바인드 마운트 권한 충돌 회피
+    working_dir: /opt/app
+    volumes:
+      - ./data:/data:ro               # 입력 CSV (호스트 → 컨테이너, 읽기 전용)
+      - warehouse_data:/warehouse     # parquet + 체크포인트 마커
+      - metastore_data:/opt/app/metastore_db  # Hive 임베디드 metastore
+    command:
+      - --class
+      - com.example.activitylog.jobs.ActivityLogJob
+      - --master
+      - "local[*]"
+      - /opt/app/activity-log.jar
+      - --input
+      - /data/2019-Oct.csv,/data/2019-Nov.csv
+      - --warehouse-path
+      - file:///warehouse
+      - --checkpoint-path
+      - file:///warehouse
+      - --database
+      - analytics
+      - --table
+      - activity_log
+      - --start-date
+      - "2019-10-01"
+      - --end-date
+      - "2019-11-30"
+
+  # ------- WAU 리포트 -------
+  report:
+    image: activity-log:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "0:0"
+    working_dir: /opt/app
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+    volumes:
+      - warehouse_data:/warehouse
+      - metastore_data:/opt/app/metastore_db
+    command:
+      - --class
+      - com.example.activitylog.jobs.WauReport
+      - --master
+      - "local[*]"
+      - /opt/app/activity-log.jar
+      - --database
+      - analytics
+      - --table
+      - activity_log
+      - --from
+      - "2019-10-01"
+      - --to
+      - "2019-11-30"
+
+volumes:
+  warehouse_data:
+  metastore_data:
