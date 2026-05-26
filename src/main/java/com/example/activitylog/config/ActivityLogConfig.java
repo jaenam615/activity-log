@@ -1,4 +1,4 @@
-package com.backpackr.activitylog.config;
+package com.example.activitylog.config;
 
 import java.time.LocalDate;
 import java.util.Arrays;

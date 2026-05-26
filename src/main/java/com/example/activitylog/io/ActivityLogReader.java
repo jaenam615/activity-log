@@ -1,4 +1,4 @@
-package com.backpackr.activitylog.io;
+package com.example.activitylog.io;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;

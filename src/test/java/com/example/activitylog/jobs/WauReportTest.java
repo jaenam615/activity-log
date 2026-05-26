@@ -1,11 +1,10 @@
-package com.backpackr.activitylog.jobs;
+package com.example.activitylog.jobs;
 
-import com.backpackr.activitylog.SparkTestBase;
-import com.backpackr.activitylog.io.ActivityLogReader;
-import com.backpackr.activitylog.transform.SessionAssigner;
+import com.example.activitylog.SparkTestBase;
+import com.example.activitylog.io.ActivityLogReader;
+import com.example.activitylog.transform.SessionAssigner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.RowFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,12 +17,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WauReportTest extends SparkTestBase {
-
-    private static Row rawRow(String time, long userId) {
-        return RowFactory.create(
-                time, "view", 1L, 2L, null, null, 0.0, userId, "src"
-        );
-    }
 
     @Test
     @DisplayName("WAU by user / by session 가 동일 주차에서 일관된 결과를 낸다")

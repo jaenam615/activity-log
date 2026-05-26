@@ -1,4 +1,4 @@
-package com.backpackr.activitylog.transform;
+package com.example.activitylog.transform;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;

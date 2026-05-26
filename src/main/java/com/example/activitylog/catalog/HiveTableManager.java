@@ -1,6 +1,6 @@
-package com.backpackr.activitylog.catalog;
+package com.example.activitylog.catalog;
 
-import com.backpackr.activitylog.config.ActivityLogConfig;
+import com.example.activitylog.config.ActivityLogConfig;
 import org.apache.spark.sql.SparkSession;
 
 /**

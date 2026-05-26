@@ -1,11 +1,11 @@
-package com.backpackr.activitylog.jobs;
+package com.example.activitylog.jobs;
 
-import com.backpackr.activitylog.catalog.HiveTableManager;
-import com.backpackr.activitylog.config.ActivityLogConfig;
-import com.backpackr.activitylog.io.ActivityLogReader;
-import com.backpackr.activitylog.io.ActivityLogWriter;
-import com.backpackr.activitylog.recovery.BatchCheckpoint;
-import com.backpackr.activitylog.transform.SessionAssigner;
+import com.example.activitylog.catalog.HiveTableManager;
+import com.example.activitylog.config.ActivityLogConfig;
+import com.example.activitylog.io.ActivityLogReader;
+import com.example.activitylog.io.ActivityLogWriter;
+import com.example.activitylog.recovery.BatchCheckpoint;
+import com.example.activitylog.transform.SessionAssigner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -16,7 +16,7 @@ import org.apache.spark.sql.SparkSession;
  *
  * 예시 submit:
  *   spark-submit \
- *     --class com.backpackr.activitylog.jobs.ActivityLogJob \
+ *     --class com.example.activitylog.jobs.ActivityLogJob \
  *     --master yarn --deploy-mode cluster \
  *     activity-log-0.1.0.jar \
  *     --input s3a://raw/2019-Oct.csv,s3a://raw/2019-Nov.csv \
@@ -40,9 +40,13 @@ public final class ActivityLogJob {
         } catch (Throwable t) {
             checkpoint.fail(runId, t);
             // 원본 예외를 그대로 위로 전파 — 운영 모니터링이 비정상 종료를 감지하도록.
-            if (t instanceof RuntimeException re) throw re;
-            if (t instanceof Error err) throw err;
-            throw new RuntimeException(t);
+            // Java 21 의 pattern matching for switch (JEP 441, final) 로 타입 분기.
+            // unchecked 예외만 던지면 되므로 RuntimeException/Error 외엔 wrap.
+            switch (t) {
+                case RuntimeException re -> throw re;
+                case Error err           -> throw err;
+                default                  -> throw new RuntimeException(t);
+            }
         } finally {
             spark.stop();
         }

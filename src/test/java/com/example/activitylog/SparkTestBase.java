@@ -1,5 +1,7 @@
-package com.backpackr.activitylog;
+package com.example.activitylog;
 
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -22,5 +24,15 @@ public abstract class SparkTestBase {
                 .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
                 .config("spark.ui.enabled", "false")
                 .getOrCreate();
+    }
+
+    /**
+     * ActivityLogReader.SOURCE_SCHEMA 의 9개 컬럼 순서대로 채운 원본 Row.
+     * 테스트가 검증하지 않는 컬럼(product_id, category_id 등) 은 더미 상수로 채움.
+     */
+    protected static Row rawRow(String time, long userId) {
+        return RowFactory.create(
+                time, "view", 1L, 2L, null, null, 0.0, userId, "src"
+        );
     }
 }

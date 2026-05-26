@@ -1,6 +1,6 @@
-package com.backpackr.activitylog.recovery;
+package com.example.activitylog.recovery;
 
-import com.backpackr.activitylog.config.ActivityLogConfig;
+import com.example.activitylog.config.ActivityLogConfig;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;

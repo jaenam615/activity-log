@@ -1,6 +1,6 @@
-package com.backpackr.activitylog.io;
+package com.example.activitylog.io;
 
-import com.backpackr.activitylog.config.ActivityLogConfig;
+import com.example.activitylog.config.ActivityLogConfig;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 

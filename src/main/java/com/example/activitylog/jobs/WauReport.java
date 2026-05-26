@@ -1,8 +1,10 @@
-package com.backpackr.activitylog.jobs;
+package com.example.activitylog.jobs;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.time.LocalDate;
 
 /**
  * 외부 Hive 테이블을 두 가지 방식으로 집계해 WAU 산출:
@@ -13,7 +15,7 @@ import org.apache.spark.sql.SparkSession;
  * 두 정의가 같은 주 버킷을 쓰므로 결과를 1:1 로 비교 가능.
  *
  * 실행 예:
- *   spark-submit --class com.backpackr.activitylog.jobs.WauReport <jar> \
+ *   spark-submit --class com.example.activitylog.jobs.WauReport <jar> \
  *     --database analytics --table activity_log \
  *     --from 2019-10-01 --to 2019-11-30
  */
@@ -21,7 +23,11 @@ public final class WauReport {
 
     private WauReport() {}
 
-    public record Args(String database, String tableName, String from, String to) {}
+    /**
+     * 날짜는 LocalDate 로 받아 (1) CLI 인자 형식이 잘못되면 parse 단계에서 즉시 실패,
+     * (2) SQL 에 박힐 때 항상 ISO 형식 (yyyy-MM-dd) 임을 보장 — injection 위험 차단.
+     */
+    public record Args(String database, String tableName, LocalDate from, LocalDate to) {}
 
     public static void main(String[] argv) {
         Args args = parse(argv);
@@ -70,8 +76,8 @@ public final class WauReport {
     private static Args parse(String[] argv) {
         String database = "default";
         String tableName = "activity_log";
-        String from = null;
-        String to = null;
+        LocalDate from = null;
+        LocalDate to = null;
         int i = 0;
         while (i < argv.length) {
             String key = argv[i++];
@@ -80,13 +86,16 @@ public final class WauReport {
             switch (key) {
                 case "--database" -> database = value;
                 case "--table"    -> tableName = value;
-                case "--from"     -> from = value;
-                case "--to"       -> to = value;
+                case "--from"     -> from = LocalDate.parse(value);
+                case "--to"       -> to   = LocalDate.parse(value);
                 default -> throw new IllegalArgumentException("unknown arg: " + key);
             }
         }
         if (from == null || to == null) {
             throw new IllegalArgumentException("--from and --to are required");
+        }
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("--to must be >= --from");
         }
         return new Args(database, tableName, from, to);
     }

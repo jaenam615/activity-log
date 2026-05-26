@@ -1,10 +1,9 @@
-package com.backpackr.activitylog.transform;
+package com.example.activitylog.transform;
 
-import com.backpackr.activitylog.SparkTestBase;
-import com.backpackr.activitylog.io.ActivityLogReader;
+import com.example.activitylog.SparkTestBase;
+import com.example.activitylog.io.ActivityLogReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.RowFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,13 +14,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SessionAssignerTest extends SparkTestBase {
-
-    private static Row rawRow(String time, long userId) {
-        // SOURCE_SCHEMA 의 9개 컬럼 순서대로 값을 채움.
-        return RowFactory.create(
-                time, "view", 100L, 200L, null, null, 0.0, userId, "src-sess"
-        );
-    }
 
     private static Dataset<Row> rawDF(List<Row> rows) {
         return spark.createDataFrame(rows, ActivityLogReader.SOURCE_SCHEMA);
