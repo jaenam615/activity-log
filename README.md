@@ -42,8 +42,6 @@ docker compose up --build report
 | `docker-compose.yml` | `ingest` / `report` 두 서비스. `warehouse_data`, `metastore_data` named volume 으로 parquet · Hive Derby metastore 공유. |
 | `.dockerignore` | `build/`, `.gradle/`, `data/`, `.idea/` 등 컨텍스트에서 제외. |
 
-> Spark 4.0 부터 Java 21 을 공식 지원하므로 `--add-opens` 같은 JVM hack 없이 동작합니다.
-
 ---
 
 ## 아키텍처
